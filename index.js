@@ -1,127 +1,85 @@
 'use strict';
 
-var extend = require('jquery-extend'),
+var assert = require('assert'),
+    extend = require('jquery-extend'),
     request = require('request'),
     Promise = require('bluebird');
 
 var Droplet = require('./lib/droplet'),
     Region = require('./lib/region'),
     Image = require('./lib/image'),
-    Key = require('./lib/key');
+    Key = require('./lib/key'),
+    ApiEvent = require('./lib/apievent');
     
 var config = require('./config');
 
-function pRequest(url, qs) {
-    return new Promise(function (resolve, reject) {
-        console.log({ url: url, qs: qs });
-        request({ url: url, qs: qs }, function (err, res, body) {
-            if (err) { reject(new Error(err)); }
-            else {
-                try {
-                    body = JSON.parse(body);
-                } catch (e) {
-                    return reject(new Error('Failed to convert JSON'));
-                }
-                
-                if (body.status === 'ERROR') {
-                    reject(new Error(body.message));
-                } else {
-                    console.log(body);
-                    resolve(body);
-                }
-            }
-        });
+Promise.prototype.event = function () {
+    var req = this.apiRequest;
+    return this.then(function (evt) {
+        console.log('new event', evt);
+        return new ApiEvent(evt, req);
     });
-}
-/*
-GET https://api.digitalocean.com/droplets/new?
-client_id=[client_id]&
-api_key=[api_key]&
-name=[droplet_name]&
-size_id=[size_id]&
-image_id=[image_id]&
-region_id=[region_id]&
-ssh_key_ids=[ssh_key_id1],[ssh_key_id2]
-*/
+};
+
 function DO(config) {
-    this.apiHost = config.apiHost;
-    this.clientId = config.clientId;
-    this.apiKey = config.apiKey;
-}
-DO.prototype.apiRequest = function (path, args) {
-    var qs = extend({}, {
-        client_id: this.clientId,
-        api_key: this.apiKey
-    }, args);
-    return pRequest(this.apiHost + path, qs);
-};
-
-DO.Droplet = Droplet;
-DO.prototype.getDroplets = function () {
-    var req = this.apiRequest.bind(this);
-    
-    return this.apiRequest('droplets/')
-    .then(function (res) {
-        if (res.status === 'OK') {
-            return res.droplets.map(function (d) {
-                return new Droplet(d, req);
-            });
-        }
-    });
-};
-DO.prototype.createDroplet = function (args) {
-    if (args.name === void 0 ||
-        args.size === void 0 ||
-        args.image === void 0 ||
-        args.region === void 0)
-    {
-        var err = new Error('Invalid arguments');
-        err.args = args;
-        return Promise.reject(err);
+    function Client() {
+        this.apiHost = config.apiHost;
+        this.clientId = config.clientId;
+        this.apiKey = config.apiKey;
+        this.apiRate = config.apiRate || 1000;
+        this.apiPollRate = config.apiPollRate || 5000;
+        this.regions = config.regions;
     }
-    
-    return this.apiRequest('droplets/new', {
-        name: args.name,
-        size_id: args.sizeId,
-        image_id: args.imageId,
-        region_id: args.regionId,
-        ssh_key_ids: Array.isArray(args.keys) ? args.keys.join() : args.keys,
-        private_networking: !!args.private,
-        backups_enabled: !!args.backup
+    ['Image', 'Droplet', 'Key', 'Region'].forEach(function (type) {
+        Client[type] = require('./lib/'+type.toLowerCase())(Client, Promise);
     });
-};
 
-DO.prototype.getRegions = function () {
-    var req = this.apiRequest.bind(this);
-    
-    return this.apiRequest('regions/')
-    .then(function (res) {
-        return res.regions.map(function (r) { return new Region(r, req); });
-    });
-};
+    Client.prototype.apiRequest = function (path, args) {
+        if (path.indexOf('?') > -1) { assert.notEqual(this.id, void 0); }
+        
+        var url = this.apiHost + path.replace('?', this.id);
+        var qs = extend({}, {
+            client_id: this.clientId,
+            api_key: this.apiKey
+        }, args);
 
-DO.Image = Image;
-DO.prototype.getImages = function () {
-    return this.apiRequest('images/')
-    .then(function (res) { return res.images; });
-};
-
-DO.Key = Key;
-DO.prototype.getKeys = function () {
-    var req = this.apiRequest.bind(this);
-    
-    return this.apiRequest('ssh_keys/')
-    .then(function (res) {
-        return Promise.map(res.ssh_keys, function (k) {
-            var key = new Key(k, req);
-            return key.fetch();
+        var promise = new Promise(function (resolve, reject) {
+            //console.log(url);
+            request({ url: url, qs: qs }, function (err, res, body) {
+                //console.log(body);
+                if (err) { reject(new Error(err)); }
+                else {
+                    try { body = JSON.parse(body); }
+                    catch (e) { return reject(new Error('Failed to convert JSON')); }
+                    
+                    if (body.status === 'ERROR') { reject(new Error(body.message)); }
+                    else { resolve(body); }
+                }
+            });
         });
-    });
-};
+        promise.apiRequest = this.apiRequest.bind(this);
+        return promise;
+    };
+    
+    return new Client();
+}
 
 var foo = new DO(config);
-foo.getDroplets().then(function (res) {
-    console.log(res);
+
+foo.getDroplet(1275855).then(function (droplet) {
+    if (droplet.type !== 'node') {
+        console.log('Not a node, won\'t reboot!');
+        return;
+    }
+    console.log('rebooting');
+    return droplet.reboot()//(3060750)
+    .event()
+    .progressed(function (pcnt) {
+        console.log('progress:', pcnt);
+    })
+    .then(function () {
+        console.log('done');
+    });
 }).catch(function (err) {
     console.error(err.stack);
 });
