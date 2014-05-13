@@ -11,12 +11,11 @@ var Droplet = require('./lib/droplet'),
     Key = require('./lib/key'),
     ApiEvent = require('./lib/apievent');
     
-var config = require('./config');
+module.exports = DO;
 
 Promise.prototype.event = function () {
     var req = this.apiRequest;
     return this.then(function (evt) {
-        console.log('new event', evt);
         return new ApiEvent(evt, req);
     });
 };
@@ -63,23 +62,3 @@ function DO(config) {
     
     return new Client();
 }
-
-var foo = new DO(config);
-
-foo.getDroplet(1275855).then(function (droplet) {
-    if (droplet.type !== 'node') {
-        console.log('Not a node, won\'t reboot!');
-        return;
-    }
-    console.log('rebooting');
-    return droplet.reboot()//(3060750)
-    .event()
-    .progressed(function (pcnt) {
-        console.log('progress:', pcnt);
-    })
-    .then(function () {
-        console.log('done');
-    });
-}).catch(function (err) {
-    console.error(err.stack);
-});

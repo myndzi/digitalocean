@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "shortbus": "^0.1.0",
     "bluebird": "^1.2.1",
     "request": "^2.34.0",
     "jquery-extend": "^2.0.3"
