@@ -29,7 +29,7 @@ function DO(config) {
         this.apiPollRate = config.apiPollRate || 5000;
         this.regions = config.regions;
     }
-    ['Image', 'Droplet', 'Key', 'Region'].forEach(function (type) {
+    ['Image', 'Droplet', 'Key', 'Region', 'Domain', 'Size', 'ApiEvent'].forEach(function (type) {
         Client[type] = require('./lib/'+type.toLowerCase())(Client, Promise);
     });
 
@@ -43,7 +43,7 @@ function DO(config) {
         }, args);
 
         var promise = new Promise(function (resolve, reject) {
-            //console.log(url);
+            console.log(url, qs);
             request({ url: url, qs: qs }, function (err, res, body) {
                 //console.log(body);
                 if (err) { reject(new Error(err)); }
