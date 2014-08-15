@@ -43,7 +43,7 @@ function DO(config) {
         }, args);
 
         var promise = new Promise(function (resolve, reject) {
-            console.log(url, qs);
+            //console.log(url, qs);
             request({ url: url, qs: qs }, function (err, res, body) {
                 //console.log(body);
                 if (err) { reject(new Error(err)); }
