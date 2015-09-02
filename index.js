@@ -1,6 +1,7 @@
 'use strict';
 
-var assert = require('assert'),
+var http = require('http'),
+    assert = require('assert'),
     extend = require('jquery-extend'),
     request = require('request'),
     Promise = require('bluebird');
@@ -47,6 +48,10 @@ function DO(config) {
             request({ url: url, qs: qs }, function (err, res, body) {
                 //console.log(body);
                 if (err) { reject(new Error(err)); }
+                else if (res.statusCode !== 200) {
+                    var msg = 'HTTP ' + res.statusCode + ': ' + http.STATUS_CODES[res.statusCode];
+                    reject(msg);
+                }
                 else {
                     try { body = JSON.parse(body); }
                     catch (e) { return reject(new Error('Failed to convert JSON')); }
